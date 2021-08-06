@@ -21,6 +21,9 @@ const (
 	BuildLabel = "openshift.io/build.name"
 	// DefaultDockerLabelNamespace is the key of a Build label, whose values are build metadata.
 	DefaultDockerLabelNamespace = "io.openshift."
+	// OriginVersion is an environment variable key that indicates the version of origin that
+	// created this build definition.
+	OriginVersion = "ORIGIN_VERSION"
 )
 
 // Build encapsulates the inputs needed to produce a new deployable image, as well as
@@ -188,10 +191,8 @@ type BuildSource struct {
 	// Git contains optional information about git build source
 	Git *GitBuildSource
 
-	// Image describes an image to be used to provide source for the build
-	// EXPERIMENTAL.  This will be changing to an array of images in the near future
-	// and no migration/compatibility will be provided.  Use at your own risk.
-	Image *ImageSource
+	// Images describes a set of images to be used to provide source for the build
+	Images []ImageSource
 
 	// ContextDir specifies the sub-directory where the source code for the application exists.
 	// This allows to have buildable sources in directory other than root of
@@ -297,10 +298,10 @@ type GitBuildSource struct {
 	Ref string
 
 	// HTTPProxy is a proxy used to reach the git repository over http
-	HTTPProxy string
+	HTTPProxy *string
 
 	// HTTPSProxy is a proxy used to reach the git repository over https
-	HTTPSProxy string
+	HTTPSProxy *string
 }
 
 // SourceControlUser defines the identity of a user of source control
@@ -358,6 +359,9 @@ type CustomBuildStrategy struct {
 
 	// Secrets is a list of additional secrets that will be included in the custom build pod
 	Secrets []SecretSpec
+
+	// BuildAPIVersion is the requested API version for the Build object serialized and passed to the custom builder
+	BuildAPIVersion string
 }
 
 // DockerBuildStrategy defines input parameters specific to Docker build.
@@ -643,7 +647,7 @@ type BuildLogOptions struct {
 	// Follow if true indicates that the build log should be streamed until
 	// the build terminates.
 	Follow bool
-	// If true, return previous terminated container logs
+	// If true, return previous build logs.
 	Previous bool
 	// A relative time in seconds before the current time from which to show logs. If this value
 	// precedes the time a pod was started, only logs since the pod start will be returned.

@@ -37,7 +37,13 @@ function cleanup() {
 trap cleanup EXIT SIGINT
 
 package="${OS_TEST_PACKAGE:-test/integration}"
-tags="${OS_TEST_TAGS:-integration !docker etcd}"
+
+if docker version >/dev/null 2>&1; then
+	tags="${OS_TEST_TAGS:-integration docker etcd}"
+else
+	echo "++ Docker not available, running only integration tests without the 'docker' tag"
+	tags="${OS_TEST_TAGS:-integration !docker etcd}"
+fi
 
 export GOMAXPROCS="$(grep "processor" -c /proc/cpuinfo 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || 1)"
 
@@ -71,7 +77,7 @@ function exectest() {
 
 	result=1
 	if [ -n "${VERBOSE-}" ]; then
-		ETCD_PORT=${ETCD_PORT} "${testexec}" -test.v -test.run="^$1$" "${@:2}" 2>&1
+		ETCD_PORT=${ETCD_PORT} "${testexec}" -vmodule=*=5 -test.v -test.run="^$1$" "${@:2}" 2>&1
 		result=$?
 	else
 		out=$(ETCD_PORT=${ETCD_PORT} "${testexec}" -test.run="^$1$" "${@:2}" 2>&1)

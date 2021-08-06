@@ -128,6 +128,11 @@ etcdStorageConfig:
 imageConfig:
   format: ""
   latest: false
+imagePolicyConfig:
+  disableScheduledImport: false
+  maxImagesBulkImportedPerRepository: 0
+  maxScheduledImageImportsPerMinute: 0
+  scheduledImageImportMinimumIntervalSeconds: 0
 kind: MasterConfig
 kubeletClientInfo:
   ca: ""
@@ -169,6 +174,7 @@ networkConfig:
   networkPluginName: ""
   serviceNetworkCIDR: ""
 oauthConfig:
+  alwaysShowProviderSelection: false
   assetPublicURL: ""
   grantConfig:
     method: ""
@@ -295,6 +301,7 @@ oauthConfig:
     sessionSecretsFile: ""
   templates:
     login: ""
+    providerSelection: ""
   tokenConfig:
     accessTokenMaxAgeSeconds: 0
     authorizeTokenMaxAgeSeconds: 0
@@ -352,8 +359,8 @@ type AdmissionPluginTestConfig struct {
 func (*AdmissionPluginTestConfig) IsAnAPIObject() {}
 
 func TestMasterConfig(t *testing.T) {
-	internal.Scheme.AddKnownTypes("v1", &AdmissionPluginTestConfig{})
-	internal.Scheme.AddKnownTypes("", &AdmissionPluginTestConfig{})
+	internal.Scheme.AddKnownTypes(SchemeGroupVersion, &AdmissionPluginTestConfig{})
+	internal.Scheme.AddKnownTypes(internal.SchemeGroupVersion, &AdmissionPluginTestConfig{})
 	config := &internal.MasterConfig{
 		ServingInfo: internal.HTTPServingInfo{
 			ServingInfo: internal.ServingInfo{

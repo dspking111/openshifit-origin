@@ -181,6 +181,9 @@ type MasterConfig struct {
 	// ImageConfig holds options that describe how to build image names for system components
 	ImageConfig ImageConfig `json:"imageConfig"`
 
+	// ImagePolicyConfig controls limits and behavior for importing images
+	ImagePolicyConfig ImagePolicyConfig `json:"imagePolicyConfig"`
+
 	// PolicyConfig holds information about where to locate critical pieces of bootstrapping policy
 	PolicyConfig PolicyConfig `json:"policyConfig"`
 
@@ -192,6 +195,21 @@ type MasterConfig struct {
 
 	// NetworkConfig to be passed to the compiled in network plugin
 	NetworkConfig MasterNetworkConfig `json:"networkConfig"`
+}
+
+type ImagePolicyConfig struct {
+	// MaxImagesBulkImportedPerRepository controls the number of images that are imported when a user
+	// does a bulk import of a Docker repository. This number defaults to 5 to prevent users from
+	// importing large numbers of images accidentally. Set -1 for no limit.
+	MaxImagesBulkImportedPerRepository int `json:"maxImagesBulkImportedPerRepository"`
+	// DisableScheduledImport allows scheduled background import of images to be disabled.
+	DisableScheduledImport bool `json:"disableScheduledImport"`
+	// ScheduledImageImportMinimumIntervalSeconds is the minimum number of seconds that can elapse between when image streams
+	// scheduled for background import are checked against the upstream repository. The default value is 15 minutes.
+	ScheduledImageImportMinimumIntervalSeconds int `json:"scheduledImageImportMinimumIntervalSeconds"`
+	// MaxScheduledImageImportsPerMinute is the maximum number of scheduled image streams that will be imported in the
+	// background per minute. The default value is 60. Set to -1 for unlimited.
+	MaxScheduledImageImportsPerMinute int `json:"maxScheduledImageImportsPerMinute"`
 }
 
 type ProjectConfig struct {
@@ -407,6 +425,9 @@ type OAuthConfig struct {
 	// AssetPublicURL is used for building valid client redirect URLs for external access
 	AssetPublicURL string `json:"assetPublicURL"`
 
+	// AlwaysShowProviderSelection will force the provider selection page to render even when there is only a single provider.
+	AlwaysShowProviderSelection bool `json:"alwaysShowProviderSelection"`
+
 	//IdentityProviders is an ordered list of ways for a user to identify themselves
 	IdentityProviders []IdentityProvider `json:"identityProviders"`
 
@@ -426,6 +447,10 @@ type OAuthTemplates struct {
 	// Login is a path to a file containing a go template used to render the login page.
 	// If unspecified, the default login page is used.
 	Login string `json:"login"`
+
+	// ProviderSelection is a path to a file containing a go template used to render the provider selection page.
+	// If unspecified, the default provider selection page is used.
+	ProviderSelection string `json:"providerSelection"`
 }
 
 type ServiceAccountConfig struct {

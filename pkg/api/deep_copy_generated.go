@@ -16,7 +16,7 @@ import (
 	unversioned "k8s.io/kubernetes/pkg/api/unversioned"
 	conversion "k8s.io/kubernetes/pkg/conversion"
 	runtime "k8s.io/kubernetes/pkg/runtime"
-	util "k8s.io/kubernetes/pkg/util"
+	intstr "k8s.io/kubernetes/pkg/util/intstr"
 	sets "k8s.io/kubernetes/pkg/util/sets"
 )
 
@@ -966,13 +966,15 @@ func deepCopy_api_BuildSource(in buildapi.BuildSource, out *buildapi.BuildSource
 	} else {
 		out.Git = nil
 	}
-	if in.Image != nil {
-		out.Image = new(buildapi.ImageSource)
-		if err := deepCopy_api_ImageSource(*in.Image, out.Image, c); err != nil {
-			return err
+	if in.Images != nil {
+		out.Images = make([]buildapi.ImageSource, len(in.Images))
+		for i := range in.Images {
+			if err := deepCopy_api_ImageSource(in.Images[i], &out.Images[i], c); err != nil {
+				return err
+			}
 		}
 	} else {
-		out.Image = nil
+		out.Images = nil
 	}
 	out.ContextDir = in.ContextDir
 	if in.SourceSecret != nil {
@@ -1163,6 +1165,7 @@ func deepCopy_api_CustomBuildStrategy(in buildapi.CustomBuildStrategy, out *buil
 	} else {
 		out.Secrets = nil
 	}
+	out.BuildAPIVersion = in.BuildAPIVersion
 	return nil
 }
 
@@ -1206,8 +1209,18 @@ func deepCopy_api_DockerBuildStrategy(in buildapi.DockerBuildStrategy, out *buil
 func deepCopy_api_GitBuildSource(in buildapi.GitBuildSource, out *buildapi.GitBuildSource, c *conversion.Cloner) error {
 	out.URI = in.URI
 	out.Ref = in.Ref
-	out.HTTPProxy = in.HTTPProxy
-	out.HTTPSProxy = in.HTTPSProxy
+	if in.HTTPProxy != nil {
+		out.HTTPProxy = new(string)
+		*out.HTTPProxy = *in.HTTPProxy
+	} else {
+		out.HTTPProxy = nil
+	}
+	if in.HTTPSProxy != nil {
+		out.HTTPSProxy = new(string)
+		*out.HTTPSProxy = *in.HTTPSProxy
+	} else {
+		out.HTTPSProxy = nil
+	}
 	return nil
 }
 
@@ -1478,6 +1491,7 @@ func deepCopy_api_DeploymentConfigSpec(in deployapi.DeploymentConfigSpec, out *d
 		out.Triggers = nil
 	}
 	out.Replicas = in.Replicas
+	out.Test = in.Test
 	if in.Selector != nil {
 		out.Selector = make(map[string]string)
 		for key, val := range in.Selector {
@@ -1715,6 +1729,12 @@ func deepCopy_api_LifecycleHook(in deployapi.LifecycleHook, out *deployapi.Lifec
 }
 
 func deepCopy_api_RecreateDeploymentStrategyParams(in deployapi.RecreateDeploymentStrategyParams, out *deployapi.RecreateDeploymentStrategyParams, c *conversion.Cloner) error {
+	if in.TimeoutSeconds != nil {
+		out.TimeoutSeconds = new(int64)
+		*out.TimeoutSeconds = *in.TimeoutSeconds
+	} else {
+		out.TimeoutSeconds = nil
+	}
 	if in.Pre != nil {
 		out.Pre = new(deployapi.LifecycleHook)
 		if err := deepCopy_api_LifecycleHook(*in.Pre, out.Pre, c); err != nil {
@@ -1722,6 +1742,14 @@ func deepCopy_api_RecreateDeploymentStrategyParams(in deployapi.RecreateDeployme
 		}
 	} else {
 		out.Pre = nil
+	}
+	if in.Mid != nil {
+		out.Mid = new(deployapi.LifecycleHook)
+		if err := deepCopy_api_LifecycleHook(*in.Mid, out.Mid, c); err != nil {
+			return err
+		}
+	} else {
+		out.Mid = nil
 	}
 	if in.Post != nil {
 		out.Post = new(deployapi.LifecycleHook)
@@ -1756,12 +1784,12 @@ func deepCopy_api_RollingDeploymentStrategyParams(in deployapi.RollingDeployment
 	if newVal, err := c.DeepCopy(in.MaxUnavailable); err != nil {
 		return err
 	} else {
-		out.MaxUnavailable = newVal.(util.IntOrString)
+		out.MaxUnavailable = newVal.(intstr.IntOrString)
 	}
 	if newVal, err := c.DeepCopy(in.MaxSurge); err != nil {
 		return err
 	} else {
-		out.MaxSurge = newVal.(util.IntOrString)
+		out.MaxSurge = newVal.(intstr.IntOrString)
 	}
 	if in.UpdatePercent != nil {
 		out.UpdatePercent = new(int)
@@ -1947,6 +1975,62 @@ func deepCopy_api_Image(in imageapi.Image, out *imageapi.Image, c *conversion.Cl
 	}
 	out.DockerImageMetadataVersion = in.DockerImageMetadataVersion
 	out.DockerImageManifest = in.DockerImageManifest
+	if in.DockerImageLayers != nil {
+		out.DockerImageLayers = make([]imageapi.ImageLayer, len(in.DockerImageLayers))
+		for i := range in.DockerImageLayers {
+			if err := deepCopy_api_ImageLayer(in.DockerImageLayers[i], &out.DockerImageLayers[i], c); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.DockerImageLayers = nil
+	}
+	return nil
+}
+
+func deepCopy_api_ImageImportSpec(in imageapi.ImageImportSpec, out *imageapi.ImageImportSpec, c *conversion.Cloner) error {
+	if newVal, err := c.DeepCopy(in.From); err != nil {
+		return err
+	} else {
+		out.From = newVal.(pkgapi.ObjectReference)
+	}
+	if in.To != nil {
+		if newVal, err := c.DeepCopy(in.To); err != nil {
+			return err
+		} else {
+			out.To = newVal.(*pkgapi.LocalObjectReference)
+		}
+	} else {
+		out.To = nil
+	}
+	if err := deepCopy_api_TagImportPolicy(in.ImportPolicy, &out.ImportPolicy, c); err != nil {
+		return err
+	}
+	out.IncludeManifest = in.IncludeManifest
+	return nil
+}
+
+func deepCopy_api_ImageImportStatus(in imageapi.ImageImportStatus, out *imageapi.ImageImportStatus, c *conversion.Cloner) error {
+	out.Tag = in.Tag
+	if newVal, err := c.DeepCopy(in.Status); err != nil {
+		return err
+	} else {
+		out.Status = newVal.(unversioned.Status)
+	}
+	if in.Image != nil {
+		out.Image = new(imageapi.Image)
+		if err := deepCopy_api_Image(*in.Image, out.Image, c); err != nil {
+			return err
+		}
+	} else {
+		out.Image = nil
+	}
+	return nil
+}
+
+func deepCopy_api_ImageLayer(in imageapi.ImageLayer, out *imageapi.ImageLayer, c *conversion.Cloner) error {
+	out.Name = in.Name
+	out.Size = in.Size
 	return nil
 }
 
@@ -2007,6 +2091,79 @@ func deepCopy_api_ImageStreamImage(in imageapi.ImageStreamImage, out *imageapi.I
 	}
 	if err := deepCopy_api_Image(in.Image, &out.Image, c); err != nil {
 		return err
+	}
+	return nil
+}
+
+func deepCopy_api_ImageStreamImport(in imageapi.ImageStreamImport, out *imageapi.ImageStreamImport, c *conversion.Cloner) error {
+	if newVal, err := c.DeepCopy(in.TypeMeta); err != nil {
+		return err
+	} else {
+		out.TypeMeta = newVal.(unversioned.TypeMeta)
+	}
+	if newVal, err := c.DeepCopy(in.ObjectMeta); err != nil {
+		return err
+	} else {
+		out.ObjectMeta = newVal.(pkgapi.ObjectMeta)
+	}
+	if err := deepCopy_api_ImageStreamImportSpec(in.Spec, &out.Spec, c); err != nil {
+		return err
+	}
+	if err := deepCopy_api_ImageStreamImportStatus(in.Status, &out.Status, c); err != nil {
+		return err
+	}
+	return nil
+}
+
+func deepCopy_api_ImageStreamImportSpec(in imageapi.ImageStreamImportSpec, out *imageapi.ImageStreamImportSpec, c *conversion.Cloner) error {
+	out.Import = in.Import
+	if in.Repository != nil {
+		out.Repository = new(imageapi.RepositoryImportSpec)
+		if err := deepCopy_api_RepositoryImportSpec(*in.Repository, out.Repository, c); err != nil {
+			return err
+		}
+	} else {
+		out.Repository = nil
+	}
+	if in.Images != nil {
+		out.Images = make([]imageapi.ImageImportSpec, len(in.Images))
+		for i := range in.Images {
+			if err := deepCopy_api_ImageImportSpec(in.Images[i], &out.Images[i], c); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Images = nil
+	}
+	return nil
+}
+
+func deepCopy_api_ImageStreamImportStatus(in imageapi.ImageStreamImportStatus, out *imageapi.ImageStreamImportStatus, c *conversion.Cloner) error {
+	if in.Import != nil {
+		out.Import = new(imageapi.ImageStream)
+		if err := deepCopy_api_ImageStream(*in.Import, out.Import, c); err != nil {
+			return err
+		}
+	} else {
+		out.Import = nil
+	}
+	if in.Repository != nil {
+		out.Repository = new(imageapi.RepositoryImportStatus)
+		if err := deepCopy_api_RepositoryImportStatus(*in.Repository, out.Repository, c); err != nil {
+			return err
+		}
+	} else {
+		out.Repository = nil
+	}
+	if in.Images != nil {
+		out.Images = make([]imageapi.ImageImportStatus, len(in.Images))
+		for i := range in.Images {
+			if err := deepCopy_api_ImageImportStatus(in.Images[i], &out.Images[i], c); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Images = nil
 	}
 	return nil
 }
@@ -2129,6 +2286,46 @@ func deepCopy_api_ImageStreamTagList(in imageapi.ImageStreamTagList, out *imagea
 	return nil
 }
 
+func deepCopy_api_RepositoryImportSpec(in imageapi.RepositoryImportSpec, out *imageapi.RepositoryImportSpec, c *conversion.Cloner) error {
+	if newVal, err := c.DeepCopy(in.From); err != nil {
+		return err
+	} else {
+		out.From = newVal.(pkgapi.ObjectReference)
+	}
+	if err := deepCopy_api_TagImportPolicy(in.ImportPolicy, &out.ImportPolicy, c); err != nil {
+		return err
+	}
+	out.IncludeManifest = in.IncludeManifest
+	return nil
+}
+
+func deepCopy_api_RepositoryImportStatus(in imageapi.RepositoryImportStatus, out *imageapi.RepositoryImportStatus, c *conversion.Cloner) error {
+	if newVal, err := c.DeepCopy(in.Status); err != nil {
+		return err
+	} else {
+		out.Status = newVal.(unversioned.Status)
+	}
+	if in.Images != nil {
+		out.Images = make([]imageapi.ImageImportStatus, len(in.Images))
+		for i := range in.Images {
+			if err := deepCopy_api_ImageImportStatus(in.Images[i], &out.Images[i], c); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Images = nil
+	}
+	if in.AdditionalTags != nil {
+		out.AdditionalTags = make([]string, len(in.AdditionalTags))
+		for i := range in.AdditionalTags {
+			out.AdditionalTags[i] = in.AdditionalTags[i]
+		}
+	} else {
+		out.AdditionalTags = nil
+	}
+	return nil
+}
+
 func deepCopy_api_TagEvent(in imageapi.TagEvent, out *imageapi.TagEvent, c *conversion.Cloner) error {
 	if newVal, err := c.DeepCopy(in.Created); err != nil {
 		return err
@@ -2137,6 +2334,21 @@ func deepCopy_api_TagEvent(in imageapi.TagEvent, out *imageapi.TagEvent, c *conv
 	}
 	out.DockerImageReference = in.DockerImageReference
 	out.Image = in.Image
+	out.Generation = in.Generation
+	return nil
+}
+
+func deepCopy_api_TagEventCondition(in imageapi.TagEventCondition, out *imageapi.TagEventCondition, c *conversion.Cloner) error {
+	out.Type = in.Type
+	out.Status = in.Status
+	if newVal, err := c.DeepCopy(in.LastTransitionTime); err != nil {
+		return err
+	} else {
+		out.LastTransitionTime = newVal.(unversioned.Time)
+	}
+	out.Reason = in.Reason
+	out.Message = in.Message
+	out.Generation = in.Generation
 	return nil
 }
 
@@ -2151,10 +2363,27 @@ func deepCopy_api_TagEventList(in imageapi.TagEventList, out *imageapi.TagEventL
 	} else {
 		out.Items = nil
 	}
+	if in.Conditions != nil {
+		out.Conditions = make([]imageapi.TagEventCondition, len(in.Conditions))
+		for i := range in.Conditions {
+			if err := deepCopy_api_TagEventCondition(in.Conditions[i], &out.Conditions[i], c); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Conditions = nil
+	}
+	return nil
+}
+
+func deepCopy_api_TagImportPolicy(in imageapi.TagImportPolicy, out *imageapi.TagImportPolicy, c *conversion.Cloner) error {
+	out.Insecure = in.Insecure
+	out.Scheduled = in.Scheduled
 	return nil
 }
 
 func deepCopy_api_TagReference(in imageapi.TagReference, out *imageapi.TagReference, c *conversion.Cloner) error {
+	out.Name = in.Name
 	if in.Annotations != nil {
 		out.Annotations = make(map[string]string)
 		for key, val := range in.Annotations {
@@ -2173,6 +2402,15 @@ func deepCopy_api_TagReference(in imageapi.TagReference, out *imageapi.TagRefere
 		out.From = nil
 	}
 	out.Reference = in.Reference
+	if in.Generation != nil {
+		out.Generation = new(int64)
+		*out.Generation = *in.Generation
+	} else {
+		out.Generation = nil
+	}
+	if err := deepCopy_api_TagImportPolicy(in.ImportPolicy, &out.ImportPolicy, c); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -2503,7 +2741,7 @@ func deepCopy_api_RoutePort(in routeapi.RoutePort, out *routeapi.RoutePort, c *c
 	if newVal, err := c.DeepCopy(in.TargetPort); err != nil {
 		return err
 	} else {
-		out.TargetPort = newVal.(util.IntOrString)
+		out.TargetPort = newVal.(intstr.IntOrString)
 	}
 	return nil
 }
@@ -3009,17 +3247,27 @@ func init() {
 		deepCopy_api_DockerConfig,
 		deepCopy_api_DockerImage,
 		deepCopy_api_Image,
+		deepCopy_api_ImageImportSpec,
+		deepCopy_api_ImageImportStatus,
+		deepCopy_api_ImageLayer,
 		deepCopy_api_ImageList,
 		deepCopy_api_ImageStream,
 		deepCopy_api_ImageStreamImage,
+		deepCopy_api_ImageStreamImport,
+		deepCopy_api_ImageStreamImportSpec,
+		deepCopy_api_ImageStreamImportStatus,
 		deepCopy_api_ImageStreamList,
 		deepCopy_api_ImageStreamMapping,
 		deepCopy_api_ImageStreamSpec,
 		deepCopy_api_ImageStreamStatus,
 		deepCopy_api_ImageStreamTag,
 		deepCopy_api_ImageStreamTagList,
+		deepCopy_api_RepositoryImportSpec,
+		deepCopy_api_RepositoryImportStatus,
 		deepCopy_api_TagEvent,
+		deepCopy_api_TagEventCondition,
 		deepCopy_api_TagEventList,
+		deepCopy_api_TagImportPolicy,
 		deepCopy_api_TagReference,
 		deepCopy_api_OAuthAccessToken,
 		deepCopy_api_OAuthAccessTokenList,

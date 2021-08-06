@@ -75,6 +75,9 @@ type AppConfig struct {
 	AllowMissingImages bool
 	Deploy             bool
 
+	SourceImage     string
+	SourceImagePath string
+
 	SkipGeneration        bool
 	AllowGenerationErrors bool
 
@@ -173,16 +176,16 @@ func (c *AppConfig) SetClientMapper(clientMapper resource.ClientMapper) {
 	c.clientMapper = clientMapper
 }
 
-func (c *AppConfig) dockerRegistrySearcher() app.Searcher {
+func (c *AppConfig) dockerImageSearcher() app.Searcher {
 	return app.DockerRegistrySearcher{
-		Client:        dockerregistry.NewClient(30 * time.Second),
+		Client:        dockerregistry.NewClient(30*time.Second, true),
 		AllowInsecure: c.InsecureRegistry,
 	}
 }
 
 func (c *AppConfig) ensureDockerSearcher() {
 	if c.dockerSearcher == nil {
-		c.dockerSearcher = c.dockerRegistrySearcher()
+		c.dockerSearcher = c.dockerImageSearcher()
 	}
 }
 
@@ -190,7 +193,7 @@ func (c *AppConfig) ensureDockerSearcher() {
 func (c *AppConfig) SetDockerClient(dockerclient *docker.Client) {
 	c.dockerSearcher = app.DockerClientSearcher{
 		Client:             dockerclient,
-		RegistrySearcher:   c.dockerRegistrySearcher(),
+		RegistrySearcher:   c.dockerImageSearcher(),
 		Insecure:           c.InsecureRegistry,
 		AllowMissingImages: c.AllowMissingImages,
 	}
@@ -208,7 +211,6 @@ func (c *AppConfig) SetOpenShiftClient(osclient client.Interface, originNamespac
 		Client:            osclient,
 		ImageStreamImages: osclient,
 		Namespaces:        namespaces,
-		StopOnMatch:       !c.AsSearch,
 	}
 	c.imageStreamByAnnotationSearcher = app.NewImageStreamByAnnotationSearcher(osclient, osclient, namespaces)
 	c.templateSearcher = app.TemplateSearcher{
@@ -221,6 +223,11 @@ func (c *AppConfig) SetOpenShiftClient(osclient client.Interface, originNamespac
 		Mapper:       c.mapper,
 		ClientMapper: c.clientMapper,
 		Namespace:    originNamespace,
+	}
+	c.dockerSearcher = app.ImageImportSearcher{
+		Client:        osclient.ImageStreams(originNamespace),
+		AllowInsecure: c.InsecureRegistry,
+		Fallback:      c.dockerImageSearcher(),
 	}
 }
 
@@ -491,6 +498,17 @@ func (c *AppConfig) search(components app.ComponentReferences) error {
 	return errors.NewAggregate(errs)
 }
 
+func (c *AppConfig) detectPartialMatches(components app.ComponentReferences) error {
+	errs := []error{}
+	for _, ref := range components {
+		input := ref.Input()
+		if input.ResolvedMatch.Score != 0.0 {
+			errs = append(errs, fmt.Errorf("component %q had only a partial match of %q - if this is the value you want to use, specify it explicitly", input.From, input.ResolvedMatch.Name))
+		}
+	}
+	return errors.NewAggregate(errs)
+}
+
 // inferBuildTypes infers build status and mismatches between source and docker builders
 func (c *AppConfig) inferBuildTypes(components app.ComponentReferences) (app.ComponentReferences, error) {
 	errs := []error{}
@@ -526,9 +544,6 @@ func (c *AppConfig) inferBuildTypes(components app.ComponentReferences) (app.Com
 				errs = append(errs, fmt.Errorf("the resolved match %q for component %q cannot build source code - check whether this is the image you want to use, then use --strategy=source to build using source or --strategy=docker to treat this as a Docker base image and set up a layered Docker build", input.ResolvedMatch.Name, ref))
 				continue
 			}
-		case input.ResolvedMatch.Score != 0.0:
-			errs = append(errs, fmt.Errorf("component %q had only a partial match of %q - if this is the value you want to use, specify it explicitly", input.From, input.ResolvedMatch.Name))
-			continue
 		}
 	}
 	if len(components) == 0 && c.BinaryBuild {
@@ -567,8 +582,9 @@ func (c *AppConfig) ensureHasSource(components app.ComponentReferences, reposito
 			return fmt.Errorf("the following images require source code: %s\n"+
 				" and the following repositories are not used: %s\nUse '[image]~[repo]' to declare which code goes with which image", components, repositories)
 		case len(repositories) == 1:
-			glog.Infof("Using %q as the source for build", repositories[0])
+			glog.V(2).Infof("Using %q as the source for build", repositories[0])
 			for _, component := range components {
+				glog.V(2).Infof("Pairing with component %v", component)
 				component.Input().Use(repositories[0])
 				repositories[0].UsedBy(component)
 			}
@@ -912,6 +928,47 @@ func (c *AppConfig) RunQuery() (*QueryResult, error) {
 	}, nil
 }
 
+func (c *AppConfig) addImageSource(sourceRepos app.SourceRepositories) (app.ComponentReference, app.SourceRepositories, error) {
+	if len(c.SourceImage) == 0 {
+		return nil, sourceRepos, nil
+	}
+	paths := strings.SplitN(c.SourceImagePath, ":", 2)
+	var sourcePath, destPath string
+	switch len(paths) {
+	case 1:
+		sourcePath = paths[0]
+	case 2:
+		sourcePath = paths[0]
+		destPath = paths[1]
+	}
+	compRef, _, err := app.NewComponentInput(c.SourceImage)
+	if err != nil {
+		return nil, nil, err
+	}
+	resolver := app.PerfectMatchWeightedResolver{}
+	if c.imageStreamByAnnotationSearcher != nil {
+		resolver = append(resolver, app.WeightedResolver{Searcher: c.imageStreamByAnnotationSearcher, Weight: 0.0})
+	}
+	if c.imageStreamSearcher != nil {
+		resolver = append(resolver, app.WeightedResolver{Searcher: c.imageStreamSearcher, Weight: 1.0})
+	}
+	if c.dockerSearcher != nil {
+		resolver = append(resolver, app.WeightedResolver{Searcher: c.dockerSearcher, Weight: 2.0})
+	}
+	compRef.Resolver = resolver
+	switch len(sourceRepos) {
+	case 0:
+		sourceRepos = append(sourceRepos, app.NewImageSourceRepository(compRef, sourcePath, destPath))
+	case 1:
+		sourceRepos[0].SetSourceImage(compRef)
+		sourceRepos[0].SetSourceImagePath(sourcePath, destPath)
+	default:
+		return nil, nil, fmt.Errorf("--image-source cannot be used with multiple source repositories")
+	}
+
+	return compRef, sourceRepos, nil
+}
+
 // run executes the provided config applying provided acceptors.
 func (c *AppConfig) run(acceptors app.Acceptors) (*AppResult, error) {
 	c.ensureDockerSearcher()
@@ -928,7 +985,21 @@ func (c *AppConfig) run(acceptors app.Acceptors) (*AppResult, error) {
 		return nil, err
 	}
 
-	if err := c.resolve(components); err != nil {
+	var imageComp app.ComponentReference
+	imageComp, repositories, err = c.addImageSource(repositories)
+	if err != nil {
+		return nil, err
+	}
+	componentsIncludingImageComps := components
+	if imageComp != nil {
+		componentsIncludingImageComps = append(components, imageComp)
+	}
+	if err := c.resolve(componentsIncludingImageComps); err != nil {
+		return nil, err
+	}
+
+	err = c.detectPartialMatches(componentsIncludingImageComps)
+	if err != nil {
 		return nil, err
 	}
 

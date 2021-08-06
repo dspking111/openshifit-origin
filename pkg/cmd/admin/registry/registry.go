@@ -1,6 +1,8 @@
 package registry
 
 import (
+	cryptorand "crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
@@ -14,7 +16,7 @@ import (
 	kclientcmd "k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/runtime"
-	kutil "k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/util/intstr"
 
 	"github.com/openshift/origin/pkg/cmd/util/clientcmd"
 	"github.com/openshift/origin/pkg/cmd/util/variable"
@@ -75,6 +77,9 @@ type RegistryConfig struct {
 
 	// TODO: accept environment values.
 }
+
+// randomSecretSize is the number of random bytes to generate.
+const randomSecretSize = 32
 
 var errExit = fmt.Errorf("exit")
 
@@ -254,6 +259,12 @@ func RunCmdRegistry(f *clientcmd.Factory, cmd *cobra.Command, out io.Writer, cfg
 		livenessProbe := generateLivenessProbeConfig(healthzPort)
 		readinessProbe := generateReadinessProbeConfig(healthzPort)
 
+		secretBytes := make([]byte, randomSecretSize)
+		if _, err := cryptorand.Read(secretBytes); err != nil {
+			return fmt.Errorf("registry does not exist; could not generate random bytes for HTTP secret: %v", err)
+		}
+		env["REGISTRY_HTTP_SECRET"] = base64.StdEncoding.EncodeToString(secretBytes)
+
 		mountHost := len(cfg.HostMount) > 0
 		podTemplate := &kapi.PodTemplateSpec{
 			ObjectMeta: kapi.ObjectMeta{Labels: label},
@@ -356,9 +367,7 @@ func generateLivenessProbeConfig(port int) *kapi.Probe {
 		Handler: kapi.Handler{
 			HTTPGet: &kapi.HTTPGetAction{
 				Path: healthzRoute,
-				Port: kutil.IntOrString{
-					IntVal: port,
-				},
+				Port: intstr.FromInt(port),
 			},
 		},
 	}
@@ -370,9 +379,7 @@ func generateReadinessProbeConfig(port int) *kapi.Probe {
 		Handler: kapi.Handler{
 			HTTPGet: &kapi.HTTPGetAction{
 				Path: healthzRoute,
-				Port: kutil.IntOrString{
-					IntVal: port,
-				},
+				Port: intstr.FromInt(port),
 			},
 		},
 	}

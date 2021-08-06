@@ -160,10 +160,8 @@ type BuildSource struct {
 	// Git contains optional information about git build source
 	Git *GitBuildSource `json:"git,omitempty" description:"optional information about git build source"`
 
-	// Image describes an image to be used to provide source for the build
-	// EXPERIMENTAL.  This will be changing to an array of images in the near future
-	// and no migration/compatibility will be provided.  Use at your own risk.
-	Image *ImageSource `json:"image,omitempty" description:"optional image build source.  EXPERIMENTAL: This will be changing to an array of images in the near future and no migration/compatibility will be provided.  Use at your own risk."`
+	// Images describes a set of images to be used to provide source for the build
+	Images []ImageSource `json:"images,omitempty" description:"optional images for build source."`
 
 	// ContextDir specifies the sub-directory where the source code for the application exists.
 	// This allows to have buildable sources in directory other than root of
@@ -270,10 +268,10 @@ type GitBuildSource struct {
 	Ref string `json:"ref,omitempty" description:"identifies the branch/tag/ref to build"`
 
 	// HTTPProxy is a proxy used to reach the git repository over http
-	HTTPProxy string `json:"httpProxy,omitempty" description:"specifies a http proxy to be used during git clone operations"`
+	HTTPProxy *string `json:"httpProxy,omitempty" description:"specifies a http proxy to be used during git clone operations"`
 
 	// HTTPSProxy is a proxy used to reach the git repository over https
-	HTTPSProxy string `json:"httpsProxy,omitempty" description:"specifies a https proxy to be used during git clone operations"`
+	HTTPSProxy *string `json:"httpsProxy,omitempty" description:"specifies a https proxy to be used during git clone operations"`
 }
 
 // SourceControlUser defines the identity of a user of source control
@@ -341,6 +339,9 @@ type CustomBuildStrategy struct {
 
 	// Secrets is a list of additional secrets that will be included in the build pod
 	Secrets []SecretSpec `json:"secrets,omitempty" description:"a list of secrets to include in the build pod in addition to pull, push and source secrets"`
+
+	// BuildAPIVersion is the requested API version for the Build object serialized and passed to the custom builder
+	BuildAPIVersion string `json:"buildAPIVersion,omitempty" description:"requested API version for the Build object serialized and passed to the custom builder"`
 }
 
 // DockerBuildStrategy defines input parameters specific to Docker build.
@@ -596,8 +597,8 @@ type BuildLogOptions struct {
 	// Follow if true indicates that the build log should be streamed until
 	// the build terminates.
 	Follow bool `json:"follow,omitempty" description:"if true indicates that the log should be streamed; defaults to false"`
-	// Return previous terminated container logs. Defaults to false.
-	Previous bool `json:"previous,omitempty" description:"return previous terminated container logs; defaults to false."`
+	// Return previous build logs. Defaults to false.
+	Previous bool `json:"previous,omitempty" description:"return previous build logs; defaults to false."`
 	// A relative time in seconds before the current time from which to show logs. If this value
 	// precedes the time a pod was started, only logs since the pod start will be returned.
 	// If this value is in the future, no logs will be returned.

@@ -30,7 +30,8 @@ angular.module('openshiftConsole')
         "deploymentVersion":        ["openshift.io/deployment-config.latest-version"],
         "displayName":              ["openshift.io/display-name"],
         "description":              ["openshift.io/description"],
-        "buildNumber":              ["openshift.io/build.number"]
+        "buildNumber":              ["openshift.io/build.number"],
+        "buildPod":                 ["openshift.io/build.pod-name"]
       };
       return annotationMap[annotationKey] || null;
     };
@@ -240,6 +241,24 @@ angular.module('openshiftConsole')
         }
       }
       return null;
+    };
+  })
+  .filter('envVarsPair', function() {
+    return function(configEnvVars) {
+      var pairs = {};
+      angular.forEach(configEnvVars, function(env) {
+        pairs[env.name] = env.value;
+      });
+      return pairs;
+    };
+  })
+  .filter('destinationSourcePair', function() {
+    return function(destination) {
+      var pairs = {};
+      angular.forEach(destination, function(env) {
+        pairs[env.sourcePath] = env.destinationDir;
+      });
+      return pairs;
     };
   })
   .filter('buildForImage', function() {
@@ -768,11 +787,17 @@ angular.module('openshiftConsole')
         'deployment': 'Deployment',
         'deploymentconfig': 'Deployment Config',
         'imagestream': 'Image Stream',
+        'persistentvolumeclaims': 'Persistent Volume Claims',
         'pod': 'Pod',
+        'pods': 'Pods',
         'project': 'Project',
+        'resourcequotas': 'Resource Quotas',
         'replicationcontroller': 'Replication Controller',
+        'replicationcontrollers': 'Replication Controllers',
         'route': 'Route',
-        'service': 'Service'
+        'secrets': 'Secrets',
+        'service': 'Service',
+        'services': 'Services'
       };
       return nameFormatMap[resourceType] || resourceType;
     };

@@ -74,7 +74,7 @@ func LoadAndGetImageRegistryAuth(dockerCfg io.Reader, imageName string) client.A
 	return GetImageRegistryAuth(auths, imageName)
 }
 
-// StreamContainerIO takes data from the Reader and redirects to the log functin (typically we pass in
+// StreamContainerIO takes data from the Reader and redirects to the log function (typically we pass in
 // glog.Error for stderr and glog.Info for stdout
 func StreamContainerIO(errStream io.Reader, errOutput *string, log func(...interface{})) {
 	scanner := bufio.NewReader(errStream)
@@ -183,8 +183,10 @@ func PullImage(name string, d Docker, policy api.PullPolicy, force bool) (*PullR
 	case api.PullIfNotPresent:
 		image, err = d.CheckAndPullImage(name)
 	case api.PullAlways:
+		glog.Infof("Pulling image %q ...", name)
 		image, err = d.PullImage(name)
 	case api.PullNever:
+		glog.Infof("Checking if image %q is available locally ...", name)
 		image, err = d.CheckImage(name)
 	}
 	return &PullResult{Image: image, OnBuild: d.IsImageOnBuild(name)}, err

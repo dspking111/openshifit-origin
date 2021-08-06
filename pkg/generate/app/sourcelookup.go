@@ -16,6 +16,7 @@ import (
 	s2iapi "github.com/openshift/source-to-image/pkg/api"
 	s2igit "github.com/openshift/source-to-image/pkg/scm/git"
 	kapi "k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/validation"
 )
 
 type Dockerfile interface {
@@ -82,13 +83,16 @@ func IsRemoteRepository(s string) bool {
 
 // SourceRepository represents a code repository that may be the target of a build.
 type SourceRepository struct {
-	location   string
-	url        url.URL
-	localDir   string
-	remoteURL  *url.URL
-	contextDir string
-	secrets    []buildapi.SecretBuildSource
-	info       *SourceRepositoryInfo
+	location        string
+	url             url.URL
+	localDir        string
+	remoteURL       *url.URL
+	contextDir      string
+	secrets         []buildapi.SecretBuildSource
+	info            *SourceRepositoryInfo
+	sourceImage     ComponentReference
+	sourceImageFrom string
+	sourceImageTo   string
 
 	usedBy           []ComponentReference
 	buildWithDocker  bool
@@ -128,6 +132,16 @@ func NewBinarySourceRepository() *SourceRepository {
 	return &SourceRepository{
 		binary:           true,
 		ignoreRepository: true,
+	}
+}
+
+func NewImageSourceRepository(compRef ComponentReference, from, to string) *SourceRepository {
+	return &SourceRepository{
+		sourceImage:      compRef,
+		sourceImageFrom:  from,
+		sourceImageTo:    to,
+		ignoreRepository: true,
+		location:         compRef.Input().From,
 	}
 }
 
@@ -257,6 +271,17 @@ func (r *SourceRepository) Secrets() []buildapi.SecretBuildSource {
 	return r.secrets
 }
 
+// SetSourceImage sets the source(input) image for a repository
+func (r *SourceRepository) SetSourceImage(c ComponentReference) {
+	r.sourceImage = c
+}
+
+// SetSourceImagePath sets the source/destination to use when copying from the SourceImage
+func (r *SourceRepository) SetSourceImagePath(source, dest string) {
+	r.sourceImageFrom = source
+	r.sourceImageTo = dest
+}
+
 // AddDockerfile adds the Dockerfile contents to the SourceRepository and
 // configure it to build with Docker strategy. Returns an error if the contents
 // are invalid.
@@ -294,6 +319,9 @@ func (r *SourceRepository) AddBuildSecrets(secrets []string) error {
 		return false
 	}
 	for _, in := range injections {
+		if ok, _ := validation.ValidateSecretName(in.SourcePath, false); !ok {
+			return fmt.Errorf("the %q must be valid secret name", in.SourcePath)
+		}
 		if secretExists(in.SourcePath) {
 			return fmt.Errorf("the %q secret can be used just once", in.SourcePath)
 		}
@@ -420,6 +448,16 @@ func StrategyAndSourceForRepository(repo *SourceRepository, image *ImageRef) (*B
 	source := &SourceRef{
 		Binary:  repo.binary,
 		Secrets: repo.secrets,
+	}
+
+	if repo.sourceImage != nil {
+		srcImageRef, err := InputImageFromMatch(repo.sourceImage.Input().ResolvedMatch)
+		if err != nil {
+			return nil, nil, err
+		}
+		source.SourceImage = srcImageRef
+		source.ImageSourcePath = repo.sourceImageFrom
+		source.ImageDestPath = repo.sourceImageTo
 	}
 
 	if (repo.ignoreRepository || repo.forceAddDockerfile) && repo.Info() != nil && repo.Info().Dockerfile != nil {

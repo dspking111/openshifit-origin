@@ -35,6 +35,9 @@ func OkStrategy() deployapi.DeploymentStrategy {
 				kapi.ResourceName(kapi.ResourceMemory): resource.MustParse("10G"),
 			},
 		},
+		RecreateParams: &deployapi.RecreateDeploymentStrategyParams{
+			TimeoutSeconds: mkintp(20),
+		},
 	}
 }
 
@@ -64,11 +67,12 @@ func OkCustomParams() *deployapi.CustomDeploymentStrategyParams {
 	}
 }
 
+func mkintp(i int) *int64 {
+	v := int64(i)
+	return &v
+}
+
 func OkRollingStrategy() deployapi.DeploymentStrategy {
-	mkintp := func(i int) *int64 {
-		v := int64(i)
-		return &v
-	}
 	return deployapi.DeploymentStrategy{
 		Type: deployapi.DeploymentStrategyTypeRolling,
 		RollingParams: &deployapi.RollingDeploymentStrategyParams{
@@ -149,4 +153,9 @@ func OkDeploymentConfig(version int) *deployapi.DeploymentConfig {
 		Spec:   OkDeploymentConfigSpec(),
 		Status: OkDeploymentConfigStatus(version),
 	}
+}
+
+func TestDeploymentConfig(config *deployapi.DeploymentConfig) *deployapi.DeploymentConfig {
+	config.Spec.Test = true
+	return config
 }

@@ -123,6 +123,10 @@ angular
         templateUrl: 'views/browse/build-config.html',
         controller: 'BuildConfigController'
       })
+      .when('/project/:project/edit/builds/:buildconfig', {
+        templateUrl: 'views/edit/build-config.html',
+        controller: 'EditBuildConfigController'
+      })
       .when('/project/:project/browse/builds/:buildconfig/:build', {
         templateUrl: function(params) {
           if (params.view === 'chromeless') {
@@ -236,6 +240,10 @@ angular
         templateUrl: 'views/create/nextSteps.html',
         controller: 'NextStepsController'
       })
+      .when('/about', {
+        templateUrl: 'views/about.html',
+        controller: 'AboutController'
+      })
       .when('/oauth', {
         templateUrl: 'views/util/oauth.html',
         controller: 'OAuthController'
@@ -257,6 +265,16 @@ angular
   .constant("AUTH_CFG", angular.extend({}, (window.OPENSHIFT_CONFIG || {}).auth))
   .constant("LOGGING_URL", (window.OPENSHIFT_CONFIG || {}).loggingURL)
   .constant("METRICS_URL", (window.OPENSHIFT_CONFIG || {}).metricsURL)
+  // Sometimes we need to know the css breakpoints, make sure to update this
+  // if they ever change!
+  .constant("BREAKPOINTS", {
+    screenXsMin:  480,   // screen-xs
+    screenSmMin:  768,   // screen-sm
+    screenMdMin:  992,   // screen-md
+    screenLgMin:  1200,  // screen-lg
+    screenXlgMin: 1600   // screen-xlg
+  })
+  .constant('SOURCE_URL_PATTERN', /^((ftp|http|https|git):\/\/(\w+:{0,1}[^\s@]*@)|git@)?([^\s@]+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-\/]))?$/ )
   .config(function($httpProvider, AuthServiceProvider, RedirectLoginServiceProvider, AUTH_CFG, API_CFG, kubernetesContainerSocketProvider) {
     $httpProvider.interceptors.push('AuthInterceptor');
 

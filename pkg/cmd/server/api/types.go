@@ -1,13 +1,9 @@
 package api
 
 import (
-	"reflect"
-
 	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/util/sets"
-
-	"github.com/openshift/origin/pkg/api/latest"
 )
 
 // A new entry shall be added to FeatureAliases for every change to following values.
@@ -31,10 +27,10 @@ var (
 	KnownKubernetesStorageVersionLevels = []string{"v1", "v1beta3"}
 	// KnownOpenShiftStorageVersionLevels are storage versions that can be dealt
 	// with internally
-	KnownOpenShiftStorageVersionLevels = latest.Versions
+	KnownOpenShiftStorageVersionLevels = []string{"v1", "v1beta3"}
 	// DefaultOpenShiftStorageVersionLevel is the default storage version for
 	// resources.
-	DefaultOpenShiftStorageVersionLevel = latest.Versions[0]
+	DefaultOpenShiftStorageVersionLevel = "v1"
 	// DeadKubernetesStorageVersionLevels are storage versions which shouldn't
 	// be exposed externally.
 	DeadKubernetesStorageVersionLevels = []string{"v1beta3"}
@@ -48,7 +44,7 @@ var (
 		APIGroupKube:       {"v1"},
 		APIGroupExtensions: {"v1beta1"},
 	}
-	KnownKubeAPIGroups = sets.KeySet(reflect.ValueOf(KubeAPIGroupsToAllowedVersions))
+	KnownKubeAPIGroups = sets.StringKeySet(KubeAPIGroupsToAllowedVersions)
 
 	// FeatureAliases maps deprecated names of feature flag to their canonical
 	// names. Aliases must be lower-cased for O(1) lookup.
@@ -233,6 +229,9 @@ type MasterConfig struct {
 	// ImageConfig holds options that describe how to build image names for system components
 	ImageConfig ImageConfig
 
+	// ImagePolicyConfig controls limits and behavior for importing images
+	ImagePolicyConfig ImagePolicyConfig
+
 	// PolicyConfig holds information about where to locate critical pieces of bootstrapping policy
 	PolicyConfig PolicyConfig
 
@@ -244,6 +243,21 @@ type MasterConfig struct {
 
 	// NetworkConfig to be passed to the compiled in network plugin
 	NetworkConfig MasterNetworkConfig
+}
+
+type ImagePolicyConfig struct {
+	// MaxImagesBulkImportedPerRepository controls the number of images that are imported when a user
+	// does a bulk import of a Docker repository. This number is set low to prevent users from
+	// importing large numbers of images accidentally. Set -1 for no limit.
+	MaxImagesBulkImportedPerRepository int
+	// DisableScheduledImport allows scheduled background import of images to be disabled.
+	DisableScheduledImport bool `json:"disableScheduledImport"`
+	// ScheduledImageImportMinimumIntervalSeconds is the minimum number of seconds that can elapse between when image streams
+	// scheduled for background import are checked against the upstream repository. The default value is 15 minutes.
+	ScheduledImageImportMinimumIntervalSeconds int `json:"scheduledImageImportMinimumIntervalSeconds"`
+	// MaxScheduledImageImportsPerMinute is the maximum number of image streams that will be imported in the background per minute.
+	// The default value is 60. Set to -1 for unlimited.
+	MaxScheduledImageImportsPerMinute int `json:"maxScheduledImageImportsPerMinute"`
 }
 
 type ProjectConfig struct {
@@ -458,6 +472,9 @@ type OAuthConfig struct {
 	// AssetPublicURL is used for building valid client redirect URLs for external access
 	AssetPublicURL string
 
+	// AlwaysShowProviderSelection will force the provider selection page to render even when there is only a single provider
+	AlwaysShowProviderSelection bool
+
 	//IdentityProviders is an ordered list of ways for a user to identify themselves
 	IdentityProviders []IdentityProvider
 
@@ -477,6 +494,10 @@ type OAuthTemplates struct {
 	// Login is a path to a file containing a go template used to render the login page.
 	// If unspecified, the default login page is used.
 	Login string
+
+	// ProviderSelection is a path to a file containing a go template used to render the provider selection page.
+	// If unspecified, the default provider selection page is used.
+	ProviderSelection string
 }
 
 type ServiceAccountConfig struct {
